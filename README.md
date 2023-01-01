@@ -1,3 +1,3 @@
-# Bash tools
+# Work tools
 
-Set of tools for my daily activities. Some are used daily, some are forgotten.
+These are some of the tools I use for my work.

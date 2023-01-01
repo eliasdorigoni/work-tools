@@ -9,6 +9,12 @@ fi
 SOURCE_DIR=$( echo "$1" | sed "s;/+$;;" )
 DESTINATION_FILE=$( echo "$2" | sed "s;/+$;;" )"/""$(date '+%Y-%m-%d_%H-%M-%S')"".zip"
 
+if [[ ! -d "$SOURCE_DIR" ]]
+then
+  echo "Source directory does not exists"
+  exit 1
+fi
+
 cd "$SOURCE_DIR"
 
 zip --quiet --recurse-paths "$DESTINATION_FILE" .

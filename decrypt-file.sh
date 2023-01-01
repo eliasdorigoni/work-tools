@@ -19,7 +19,7 @@ if [ ! -f "$ENCRYPTED_KEY" ]
 then
 	echo "A key file is missing. It's expected to exist as ""$ENCRYPTED_KEY"
 	echo "Script stopped."
-	exit 1;
+	exit 1
 fi
 
 
