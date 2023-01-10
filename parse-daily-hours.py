@@ -37,29 +37,41 @@ def file_has_been_parsed():
 def extract_hours_from_file():
     title_found = False
     hours = []
+    valid_time_log = re.compile(r'([0-2]?[0-9])[\.:]([0-9]{2})')
+    valid_jira_ticket = re.compile(r'([A-Z0-9]{2,4}-[0-9]{2,4})')
 
     with open(get_filepath()) as f:
         content = [x.strip() for x in f.readlines()]
         content = list(filter(None, content))
-        for line in content:
+
+    for line in content:
+        if not title_found:
             match = re.search('#+ *Horas', line)
             if match:
                 title_found = True
-
-            if not title_found:
+            else:
                 continue
 
-            m1 = re.match(r'([0-2]?[0-9])[\.:]([0-9]{2})', line)
+        m1 = valid_time_log.match(line)
+        if m1 is None:
+            continue
 
-            if m1:
-                description = line[5:].replace('(cont)', '').strip()
-                if not description:
-                    description = '** Sin descripción **'
+        description = line[5:].replace('(cont)', '').strip()
+        if not description:
+            description = '** Sin descripción **'
 
-                hours.append({
-                    'time': datetime(2000, 1, 1, int(m1.group(1)), int(m1.group(2))),
-                    'description': description
-                })
+        m2 = valid_jira_ticket.search(description)
+        if m2:
+            key = m2.group(1)
+        else:
+            key = crc32(bytes(description, 'UTF-8'))
+
+        hours.append({
+            'time': datetime(2000, 1, 1, int(m1.group(1)), int(m1.group(2))),
+            'description': description,
+            'key': key,
+            'key_is_ticket': True if m2 else False
+        })
     return hours
 
 
@@ -78,6 +90,25 @@ def seconds_to_text(seconds):
         text.append(str(int(minutes)) + "m")
 
     return ' '.join(text)
+
+
+def get_total_duration_summary(activities):
+    # activities == contents from key 'all'
+
+    if len(activities) == 1:
+        return seconds_to_text(activities[0]['duration_in_seconds'])
+
+    all_durations = [x['duration_in_seconds'] for x in activities]
+
+    return '{} ({})'.format(
+        seconds_to_text(sum(all_durations)),
+        " + ".join(seconds_to_text(x) for x in all_durations)
+    )
+
+
+def get_total_duration(activities):
+    # activities = contents from key 'all'
+    return seconds_to_text(sum([x['duration_in_seconds'] for x in activities]))
 
 
 def calculate_activities_duration(lines):
