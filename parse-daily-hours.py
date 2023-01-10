@@ -147,9 +147,31 @@ def calculate_activities_duration(lines):
 
 def make_final_detail(lines):
     text = [PARSED_HEADER]
+    total_duration_in_seconds = 0
     for line in lines:
-        text.append("{} - {}".format(line['duration'], line['description']))
-    total_duration_in_seconds = sum([sum(x['duration_in_seconds']) for x in lines])
+        if len(line['all']) > 1:
+            if line['key_is_ticket']:
+                text.append("{} -> {}".format(
+                    get_total_duration(line['all']),
+                    line['key']
+                ))
+            else:
+                text.append("{} ->".format(get_total_duration(line['all'])))
+
+            for item in line['all']:
+                text.append("    + {} - {}".format(
+                    seconds_to_text(item['duration_in_seconds']),
+                    item['description'])
+                )
+        else:
+            text.append(
+                "{} - {}".format(
+                    get_total_duration_summary(line['all']),
+                    ". ".join([x['description'] for x in line['all'] ])
+                )
+            )
+        total_duration_in_seconds += sum([x['duration_in_seconds'] for x in line['all']])
+
     text.append("")
     text.append("Total: {}".format(seconds_to_text(total_duration_in_seconds)))
     return text
