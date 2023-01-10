@@ -5,7 +5,7 @@ from math import floor
 from zlib import crc32
 import os
 
-DAILY_FILE_PATH = '/Users/elias.dorigoni/Documents/Laboral/Daily/{}.md'
+DAILY_FILE_PATH = os.environ["DAILY_FILEPATH_FORMAT"]
 PARSED_HEADER = '## Horas calculadas'
 
 
