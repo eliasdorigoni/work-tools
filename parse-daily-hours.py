@@ -196,10 +196,20 @@ def write_detail_to_file(lines):
 
 
 def exclude_breaks(lines):
-    for index, line in enumerate(lines):
-        if re.match(r'(almuerzo|break)', line['description'], re.IGNORECASE):
-            del lines[index]
+    break_description = re.compile(r'(almuerzo|break)', re.IGNORECASE)
+    for i, line in enumerate(lines):
+        for j, activity in enumerate(line['all']):
+            if break_description.match(activity['description']):
+                del lines[i]['all'][j]
+        if len(lines[i]['all']) == 0:
+            del lines[i]
     return lines
+
+
+def dd(lines):
+    for line in lines:
+        print(line)
+    exit()
 
 
 def run():
