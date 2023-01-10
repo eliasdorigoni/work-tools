@@ -114,40 +114,33 @@ def get_total_duration(activities):
 def calculate_activities_duration(lines):
     activities = []
     registered_lines = {}
-    total_lines = len(lines)
-    for index, line in enumerate(lines):
-        if index + 1 == total_lines:
-            # Last line has no duration
-            break
 
-        next_line = lines[index + 1]
-        key = crc32(bytes(line['description'], 'UTF-8'))
+    for index, line in enumerate(lines):
+        try:
+            next_line = lines[index + 1]
+        except IndexError:
+            break # This is the last line and has no duration.
+
+        key = line['key']
         description = line['description']
         duration_in_seconds = int((next_line['time'] - line['time']).total_seconds())
 
-        if key in registered_lines:
-            found_index = registered_lines[key]
-            activities[found_index]['duration_in_seconds'].append(duration_in_seconds)
-        else:
-            registered_lines[key] = index
+        if key not in registered_lines:
+            registered_lines[key] = len(activities)
             activities.append({
-                'description': description,
-                'duration_in_seconds': [duration_in_seconds],
+                'key': key,
+                'key_is_ticket': line['key_is_ticket'],
+                'all': [{
+                    'description': description,
+                    'duration_in_seconds': duration_in_seconds,
+                }]
             })
-
-    for index, activity in enumerate(activities):
-        summary = []
-        if len(activity['duration_in_seconds']) > 1:
-            total_duration_in_seconds = 0
-            for duration in activity['duration_in_seconds']:
-                summary.append(seconds_to_text(duration))
-                total_duration_in_seconds += duration
         else:
-            total_duration_in_seconds = activity['duration_in_seconds'][0]
-
-        activities[index]['duration'] = seconds_to_text(total_duration_in_seconds)
-        if len(summary) > 0:
-            activities[index]['duration'] += ' ({})'.format(" + ".join(summary))
+            index = registered_lines[key]
+            activities[index]['all'].append({
+                'description': description,
+                'duration_in_seconds': duration_in_seconds,
+            })
 
     return activities
 
