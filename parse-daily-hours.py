@@ -191,6 +191,7 @@ def ask_confirmation_to_append_to_file():
 
 def write_detail_to_file(lines):
     with open(get_filepath(), 'a') as f:
+        f.write("\n\n")
         for x in lines:
             f.write(x + "\n")
 
