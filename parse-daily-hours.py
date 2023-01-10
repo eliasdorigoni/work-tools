@@ -184,9 +184,9 @@ def show_detail_for_console(lines):
 
 
 def ask_confirmation_to_append_to_file():
-    print("¿Guardar? [s/n]")
+    print("Enter para guardar reporte o cualquier letra para cancelar:")
     answer = input()
-    return answer.upper() in ["S"]
+    return len(answer) == 0
 
 
 def write_detail_to_file(lines):
