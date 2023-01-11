@@ -5,15 +5,46 @@ from math import floor
 from zlib import crc32
 import os
 
-DAILY_FILE_PATH = os.environ["DAILY_FILEPATH_FORMAT"]
+
+DAILY_FILEPATH_FORMAT = os.environ["DAILY_FILEPATH_FORMAT"]
 PARSED_HEADER = '## Horas calculadas'
+CURRENT_DAILY_FILEPATH = None
+VALID_TIME_LOG = re.compile(r'([0-2]?[0-9])[\.:]([0-9]{2})')
+VALID_JIRA_TICKET = re.compile(r'([A-Z0-9]{2,4}-[0-9]{2,4})')
 
 
-def get_filepath():
-    return DAILY_FILE_PATH.format(sys.argv[1])
+def remove_accents(text: str) -> str:
+    return text.replace('á', 'a').replace('Á', 'A')\
+        .replace('é', 'e').replace('É', 'E')\
+        .replace('í', 'i').replace('Í', 'I')\
+        .replace('ó', 'o').replace('Ó', 'O')\
+        .replace('ú', 'u').replace('Ú', 'U')
 
 
-def validate_parameters():
+def get_filepath() -> str:
+    global CURRENT_DAILY_FILEPATH
+    if CURRENT_DAILY_FILEPATH is not None:
+        return CURRENT_DAILY_FILEPATH
+
+    filename = sys.argv[1]
+    path = DAILY_FILEPATH_FORMAT.format(filename)
+    if os.path.isfile(path):
+        CURRENT_DAILY_FILEPATH = path
+        return path
+
+    match = re.match(r'(\d{4})(\d{2})(\d{2})', filename)
+    if match:
+        filename = "{}-{}-{}".format(match.group(1), match.group(2), match.group(3))
+        path = DAILY_FILEPATH_FORMAT.format(filename)
+        if os.path.isfile(path):
+            CURRENT_DAILY_FILEPATH = path
+            return path
+
+    print("Daily file does not exist.")
+    return ""
+
+
+def validate_parameters() -> None:
     if not len(sys.argv[1:]) >= 1:
         print("One parameter is required")
         quit(1)
@@ -25,20 +56,43 @@ def validate_parameters():
         quit(1)
 
 
-def file_has_been_parsed():
+def warn_if_file_has_been_parsed() -> None:
     with open(get_filepath()) as f:
         content = [x.strip() for x in f.readlines()]
-        for line in content:
-            if line == PARSED_HEADER:
-                return True
-    return False
+
+    for line in content:
+        if line == PARSED_HEADER:
+            print("Ya existe un detalle guardado en el archivo.")
+            break
 
 
-def extract_hours_from_file():
+def guess_description_prefix(description: str) -> str:
+    desc = remove_accents(description).lower()
+
+    if VALID_JIRA_TICKET.match(description):
+        return description
+
+    if "daily" in desc:
+        return "SAN-2406 - " + description
+
+    if "organizacion" in desc or "carga de horas" in desc:
+        return "SAN-2399 - " + description
+
+    if "refinamiento" in desc and "backlog" in desc:
+        return "SAN-2406 - " + description
+
+    if "tareas varias" in desc or "tickets varios" in desc:
+        return "SAN-2399 - " + description
+
+    if "capacitacion" in desc:
+        return "SAN-2403 - " + description
+
+    return description
+
+
+def extract_hours_from_file() -> list:
     title_found = False
     hours = []
-    valid_time_log = re.compile(r'([0-2]?[0-9])[\.:]([0-9]{2})')
-    valid_jira_ticket = re.compile(r'([A-Z0-9]{2,4}-[0-9]{2,4})')
 
     with open(get_filepath()) as f:
         content = [x.strip() for x in f.readlines()]
@@ -46,36 +100,42 @@ def extract_hours_from_file():
 
     for line in content:
         if not title_found:
-            match = re.search('#+ *Horas', line)
+            match = re.search('# Horas', line)
             if match:
                 title_found = True
             else:
                 continue
 
-        m1 = valid_time_log.match(line)
-        if m1 is None:
+        m = VALID_TIME_LOG.match(line)
+        if m is None:
             continue
 
-        description = line[5:].replace('(cont)', '').strip()
+        task_time = datetime(2000, 1, 1, int(m.group(1)), int(m.group(2)))
+
+        description = line[5:].strip()
         if not description:
             description = '** Sin descripción **'
+        elif is_break(description):
+            continue
 
-        m2 = valid_jira_ticket.search(description)
-        if m2:
-            key = m2.group(1)
+        description = guess_description_prefix(description)
+
+        m = VALID_JIRA_TICKET.search(description)
+        if m:
+            key = m.group(1)
         else:
             key = crc32(bytes(description, 'UTF-8'))
 
         hours.append({
-            'time': datetime(2000, 1, 1, int(m1.group(1)), int(m1.group(2))),
+            'time': task_time,
             'description': description,
             'key': key,
-            'key_is_ticket': True if m2 else False
+            'key_is_ticket': m is not None
         })
     return hours
 
 
-def seconds_to_text(seconds):
+def seconds_to_text(seconds: int) -> str:
     text = []
     minutes = seconds / 60
     hours = 0
@@ -92,7 +152,7 @@ def seconds_to_text(seconds):
     return ' '.join(text)
 
 
-def get_total_duration_summary(activities):
+def get_total_duration_summary(activities: list) -> str:
     # activities == contents from key 'all'
 
     if len(activities) == 1:
@@ -106,12 +166,12 @@ def get_total_duration_summary(activities):
     )
 
 
-def get_total_duration(activities):
+def get_total_duration(activities: list) -> str:
     # activities = contents from key 'all'
     return seconds_to_text(sum([x['duration_in_seconds'] for x in activities]))
 
 
-def calculate_activities_duration(lines):
+def calculate_activities_duration(lines: list) -> list:
     activities = []
     registered_lines = {}
 
@@ -145,7 +205,7 @@ def calculate_activities_duration(lines):
     return activities
 
 
-def make_final_detail(lines):
+def make_final_detail(lines: list) -> list:
     text = [PARSED_HEADER]
     total_duration_in_seconds = 0
     for line in lines:
@@ -177,59 +237,60 @@ def make_final_detail(lines):
     return text
 
 
-def show_detail_for_console(lines):
+def show_detail_for_console(lines: list) -> None:
     for line in lines:
         print(line)
     print("------")
 
 
-def ask_confirmation_to_append_to_file():
-    print("Enter para guardar reporte o cualquier letra para cancelar:")
+def ask_confirmation_to_append_to_file() -> bool:
+    print("Enter (vacío) para guardar reporte:")
     answer = input()
     return len(answer) == 0
 
 
-def write_detail_to_file(lines):
+def write_detail_to_file(lines: list) -> None:
+    prev_notes = [
+        "\n\n```\n",
+        "---- https://geopagos.atlassian.net/issues/?filter=14277\n",
+        "2406 Meeting Admin\n",
+        "2403 Capacitación/Training\n",
+        "2415 Soporte a otros equipos\n",
+        "2399 Unassigned time\n",
+        "2444 Soporte getnet\n",
+        "2404 Team building\n",
+        "2401 Feriados\n",
+        "2402 Vacaciones\n",
+        "```\n\n",
+    ]
     with open(get_filepath(), 'a') as f:
-        f.write("\n\n")
+        f.writelines(prev_notes)
         for x in lines:
             f.write(x + "\n")
 
 
-def exclude_breaks(lines):
-    break_description = re.compile(r'(almuerzo|break)', re.IGNORECASE)
-    for i, line in enumerate(lines):
-        for j, activity in enumerate(line['all']):
-            if break_description.match(activity['description']):
-                del lines[i]['all'][j]
-        if len(lines[i]['all']) == 0:
-            del lines[i]
-    return lines
+def is_break(description: str) -> bool:
+    return re.match(r'(almuerzo|break)', description, re.IGNORECASE) is not None
 
 
-def dd(lines):
+def dd(lines: list) -> None:
     for line in lines:
         print(line)
     exit()
 
 
-def run():
+def run() -> None:
     validate_parameters()
     lines = extract_hours_from_file()
     lines = calculate_activities_duration(lines)
-    lines = exclude_breaks(lines)
     lines = make_final_detail(lines)
     show_detail_for_console(lines)
-
-    if file_has_been_parsed():
-        print("Ya existe un detalle guardado en el archivo.")
+    warn_if_file_has_been_parsed()
 
     confirm = ask_confirmation_to_append_to_file()
     if confirm:
         write_detail_to_file(lines)
         print("Reporte guardado en {}.".format(get_filepath()))
-    else:
-        print("Sin cambios.")
 
 
 if __name__ == '__main__':
