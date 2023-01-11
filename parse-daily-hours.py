@@ -81,6 +81,12 @@ def guess_description_prefix(description: str) -> str:
     if "refinamiento" in desc and "backlog" in desc:
         return "SAN-2406 - " + description
 
+    if ("pre" in desc and "planning" in desc) or "planning" in desc:
+        return "SAN-2406 - " + description
+
+    if desc == "retro" or desc == "retrospectiva":
+        return "SAN-2406 - " + description
+
     if "tareas varias" in desc or "tickets varios" in desc:
         return "SAN-2399 - " + description
 
