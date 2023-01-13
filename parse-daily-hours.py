@@ -121,8 +121,6 @@ def extract_hours_from_file() -> list:
         description = line[5:].strip()
         if not description:
             description = '** Sin descripción **'
-        elif is_break(description):
-            continue
 
         description = guess_description_prefix(description)
 
@@ -275,8 +273,15 @@ def write_detail_to_file(lines: list) -> None:
             f.write(x + "\n")
 
 
-def is_break(description: str) -> bool:
-    return re.match(r'(almuerzo|break)', description, re.IGNORECASE) is not None
+def exclude_breaks(lines):
+    break_description = re.compile(r'(almuerzo|break)', re.IGNORECASE)
+    for i, line in enumerate(lines):
+        for j, activity in enumerate(line['all']):
+            if break_description.match(activity['description']):
+                del lines[i]['all'][j]
+        if len(lines[i]['all']) == 0:
+            del lines[i]
+    return lines
 
 
 def dd(lines: list) -> None:
@@ -289,6 +294,7 @@ def run() -> None:
     validate_parameters()
     lines = extract_hours_from_file()
     lines = calculate_activities_duration(lines)
+    lines = exclude_breaks(lines)
     lines = make_final_detail(lines)
     show_detail_for_console(lines)
     warn_if_file_has_been_parsed()
